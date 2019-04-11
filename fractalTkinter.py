@@ -1,11 +1,91 @@
-import turtle
+#import turtle
+import tkinter
 import copy
 import math
+import time
+import threading
+#turtle.screensize(1200,800)
+#turtle.hideturtle()
 
-turtle.screensize(1200,800)
-turtle.hideturtle()
 
 
+
+class pointer():
+    def __init__(self,x=0,y=0,heading=0):
+        self.x=x
+        self.y=y
+        self.heading=heading
+
+    def close_window(self,_event):
+        master.destroy()
+
+    def position(self):
+        return [self.x,self.y]
+
+    def setHeading(self,heading):
+        self.heading=heading
+
+    def heading(self):
+        return self.heading
+
+    def origin():
+        self.x = 0
+        self.y = 0
+
+    def NextfromHeading(self,heading,baseStep):
+        [x0,y0] = self.position()
+        theta = heading * math.pi/180
+        x = x0 + baseStep * math.cos(theta)
+        y = y0 + baseStep * math.sin(theta)
+        return [x,y]       
+
+    def setPosition(self,pos):
+        self.x=pos[0]
+        self.y=pos[1]
+
+    def setx(self,x):
+        self.x = x
+    def sety(self,y):
+        self.y = y
+
+    def xcor(self):
+        return self.x
+
+    def ycor(self):
+        return self.y
+
+    def getLinePoints(self,points):
+        points = [[x+canvas.winfo_width()/2,(canvas.winfo_height()/2-y)] for [x,y] in points]
+
+        is_first = True
+        x0 = x1 = y0 = y1 = 0
+        for [x,y] in points:
+            if is_first:
+                x0,y0 = x,y
+                is_first = False
+            else:
+                yield x0,y0,x,y
+                x0,y0 = x,y
+
+    def drawLines(self,points,width=2):
+        for (x0,y0,x1,y1) in self.getLinePoints(points):
+            canvas.create_line(x0,y0,x1,y1,width=width)
+            master.update()
+        self.setPosition(points[-1])
+
+    def drawLinefromHeadings(self,baseStep,headings,width=2):
+        line = [self.position()]
+        for h in headings:
+            line.append(self.NextfromHeading(h,baseStep))
+        self.drawLines(line,width)
+
+    def exitonclick(self):       
+        canvas.bind('<ButtonRelease-1>',self.close_window)
+        canvas.pack()
+        master.update()
+        canvas.mainloop()
+        
+       
 class Curve():
     def __init__(self,difference1=90,difference2=None,reverse1=False,reverse2=None,initialStep=[[180]],
                     x=0,y=0, connectorAngle=None, deltaAngle=0):
@@ -45,6 +125,9 @@ class Curve():
             return temp
 
 
+'''def close_window(_a):
+    master.destroy()'''
+
 def deepReverse(p):
     p.reverse()
     for i in p:
@@ -64,22 +147,34 @@ def LevyInit(heading=180,cx=0,cy=0):
 def HilbertInit(heading=0, cx=0, cy=0):   # Does not work at the moment
     return Curve(difference1=-90, difference2=0,reverse1=True,reverse2=False,initialStep=[[heading, (heading+90)%360, (heading+180)%360]],connectorAngle=heading+90,deltaAngle=-90)
 
+
+
+
+
+
+master = tkinter.Tk()
+canvas = tkinter.Canvas(master,width=1200, height=800)
+canvas.pack()
+master.update()
+
+
 levy = LevyInit()
 dragon = DragonInit()
 hoch = HochInit()
 
+turtle = pointer()
+
 def draw(mode = levy, count=1, baseStep=3,numIters=12):
     steps = mode.initialStep
     connectorAngle = mode.connectorAngle
+    width = 2
     if count==1:
-        turtle.penup()
+        #turtle.penup()
 
-        turtle.pensize(2)
-        turtle.speed(0)
         turtle.setx(mode.x)
         turtle.sety(mode.y)
-        turtle.setheading(mode.initialStep[0][0])
-        turtle.pendown()
+        #turtle.setheading(mode.initialStep[0][0])
+        #turtle.pendown()
         draw(mode,count+1,baseStep,numIters)
     else:
         if count <= numIters:
@@ -89,22 +184,27 @@ def draw(mode = levy, count=1, baseStep=3,numIters=12):
             draw(mode,count+1,baseStep,numIters)
         else:
             for step in steps:
-                for i in step:
-                    turtle.setheading(i)
-                    turtle.forward(baseStep)
-                if mode.connectorAngle:
-                    turtle.setheading(connectorAngle)
-                    turtle.forward(baseStep)
-                    connectorAngle += mode.deltaAngle
+                turtle.drawLinefromHeadings(baseStep,step,width)
+                #for i in step:
+                #    turtle.setheading(i)
+                #    turtle.forward(baseStep)
+                #if mode.connectorAngle:
+                #    turtle.setheading(connectorAngle)
+                #    turtle.forward(baseStep)
+                #    connectorAngle += mode.deltaAngle
                 
 
-def drawSnowflake(x=-300,y=150,heading=0,baseStep=2,numIters=11):
-    hoch = HochInit(x,y,heading)
-    draw(hoch, 1, baseStep, numIters)
+def drawSnowflake(x=-300,y=150,heading=0,baseStep=2,numIters=9):
+    turtle.setx(x)
+    turtle.sety(y)
+    for i in range(3):
+        hoch = HochInit(turtle.xcor(),turtle.ycor(),(heading-120*i)%360)
+        draw(hoch, 1, baseStep, numIters)
+    '''
     hoch = HochInit(cx=turtle.xcor(),cy=turtle.ycor(),heading=240)
     draw(hoch, 1, baseStep, numIters)
     hoch = HochInit(cx=turtle.xcor(),cy=turtle.ycor(),heading=120)
-    draw(hoch, 1, baseStep, numIters)
+    draw(hoch, 1, baseStep, numIters)'''
 
 #Example calls of the other curves
 #draw(mode=dragon,baseStep=3,numIters=12)
@@ -125,10 +225,8 @@ def drawHexagon(numIters,baseStep,x,y):
     exp = (numIters-3)/2 + 1
     xDif = baseStep * (3**exp)
     yDif = 1/3 * xDif * math.sin(math.pi/3) 
-    turtle.penup()
     turtle.setx(x)
     turtle.sety(y)
-    turtle.pendown
     for i in range(6):  
         Hoch = HochInit(cx=turtle.xcor(), cy=turtle.ycor(), heading=(60*i)%360)
         draw(Hoch,baseStep=baseStep,numIters=numIters)
@@ -183,10 +281,9 @@ def drawHexaflake(numIters=9,cx=-200,cy=100):
         xDif = baseStep * (3**exp)
         yDif = 1/3 * xDif * math.sin(math.pi/3)
 
-drawHexaflake(9)  # fractal of a fractal
+#drawHexaflake(9)  # fractal of a fractal
+#hoch = HochInit(-600,-200,0)
+#draw(hoch,baseStep=2,numIters=13)
+drawHexaflake(numIters=5)
 
-
-
-turtle.exitonclick() # After all drawing commands. Hold screen open. Dismiss on mouse click
-
-
+turtle.exitonclick()
