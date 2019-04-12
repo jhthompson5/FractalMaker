@@ -4,17 +4,18 @@ import copy
 import math
 import time
 import threading
-#turtle.screensize(1200,800)
-#turtle.hideturtle()
 
+DRAWING_PRESCALER = 10
 
-
+#Drawing speed can now be changed by modifyinng the DRAWING_PRESCALER value 
 
 class pointer():
-    def __init__(self,x=0,y=0,heading=0):
+    def __init__(self,x=0,y=0):
         self.x=x
         self.y=y
-        self.heading=heading
+        self.canvaswidth = canvas.winfo_width()
+        self.canvasheight = canvas.winfo_height()
+        self.drawMod=0
 
     def close_window(self,_event):
         master.destroy()
@@ -22,13 +23,7 @@ class pointer():
     def position(self):
         return [self.x,self.y]
 
-    def setHeading(self,heading):
-        self.heading=heading
-
-    def heading(self):
-        return self.heading
-
-    def origin():
+    def origin(self):
         self.x = 0
         self.y = 0
 
@@ -55,10 +50,10 @@ class pointer():
         return self.y
 
     def getLinePoints(self,points):
-        points = [[x+canvas.winfo_width()/2,(canvas.winfo_height()/2-y)] for [x,y] in points]
+        points = [[x+self.canvaswidth/2,(self.canvasheight/2-y)] for [x,y] in points]
 
         is_first = True
-        x0 = x1 = y0 = y1 = 0
+        x0 = y0 = 0
         for [x,y] in points:
             if is_first:
                 x0,y0 = x,y
@@ -69,15 +64,19 @@ class pointer():
 
     def drawLines(self,points,width=2):
         for (x0,y0,x1,y1) in self.getLinePoints(points):
-            canvas.create_line(x0,y0,x1,y1,width=width)
-            master.update()
+            canvas.create_line(x0,y0,x1,y1,width=width)      
         self.setPosition(points[-1])
 
     def drawLinefromHeadings(self,baseStep,headings,width=2):
+        
         line = [self.position()]
         for h in headings:
             line.append(self.NextfromHeading(h,baseStep))
         self.drawLines(line,width)
+        if self.drawMod % DRAWING_PRESCALER == 1:
+            master.update_idletasks()
+            master.update()
+        self.drawMod += 1
 
     def exitonclick(self):       
         canvas.bind('<ButtonRelease-1>',self.close_window)
@@ -128,6 +127,34 @@ class Curve():
 '''def close_window(_a):
     master.destroy()'''
 
+
+class Shape():
+    def __init__(self,headings,lengths,pointer,canvas):
+        if len(lengths) != len(headings):
+            raise ValueError
+        
+        self.headings = headings
+        self.lengths = lengths
+        self.pointer = pointer
+        self.canvas = canvas
+    
+    def draw(self, origin, scale, orientation, reflectVertical, reflectHorizontal):
+        lengths = self.lengths * scale
+        headings = (self.headings + orientation) % 360
+        if reflectHorizontal:
+            headings,lengths = self.flipHorizontal(headings,lengths)
+        if reflectVertical:
+            headings,lengths = self.flipVertical(headings,lengths)
+
+
+    def flipHorizontal(self,headings,lengths):
+        return headings,lengths
+
+    def flipVertical(self,headings,lengths):
+        return headings,lengths
+
+
+
 def deepReverse(p):
     p.reverse()
     for i in p:
@@ -148,10 +175,6 @@ def HilbertInit(heading=0, cx=0, cy=0):   # Does not work at the moment
     return Curve(difference1=-90, difference2=0,reverse1=True,reverse2=False,initialStep=[[heading, (heading+90)%360, (heading+180)%360]],connectorAngle=heading+90,deltaAngle=-90)
 
 
-
-
-
-
 master = tkinter.Tk()
 canvas = tkinter.Canvas(master,width=1200, height=800)
 canvas.pack()
@@ -164,9 +187,10 @@ hoch = HochInit()
 
 turtle = pointer()
 
-def draw(mode = levy, count=1, baseStep=3,numIters=12):
+def draw(mode = levy, count=1,baseStep=3,numIters=12):
+    #baseStep = 1 * 3**((17-numIters)/2)
     steps = mode.initialStep
-    connectorAngle = mode.connectorAngle
+    #connectorAngle = mode.connectorAngle
     width = 2
     if count==1:
         #turtle.penup()
@@ -200,31 +224,23 @@ def drawSnowflake(x=-300,y=150,heading=0,baseStep=2,numIters=9):
     for i in range(3):
         hoch = HochInit(turtle.xcor(),turtle.ycor(),(heading-120*i)%360)
         draw(hoch, 1, baseStep, numIters)
-    '''
-    hoch = HochInit(cx=turtle.xcor(),cy=turtle.ycor(),heading=240)
-    draw(hoch, 1, baseStep, numIters)
-    hoch = HochInit(cx=turtle.xcor(),cy=turtle.ycor(),heading=120)
-    draw(hoch, 1, baseStep, numIters)'''
 
-#Example calls of the other curves
-#draw(mode=dragon,baseStep=3,numIters=12)
 
-#draw(mode=levy)
-
-def showHochGrowth(): #Shows how hoch curve grows as the number of iterations increases
-    exp = 2
-    for i in range(7,18,2):
-        hoch = HochInit(-150,200-(i-7)*50,0)
-        draw(mode=hoch,numIters=i,baseStep=121.5/(3**exp))
+def showCurveGrowth(curve): #Shows how hoch curve grows as the number of iterations increases
+    exp = 0
+    
+    for i in range(2,13,2): #modify this between starting even or starting odd for some cool effects
+        holder = copy.deepcopy(curve)
+        curve.y = 350-(i-2)*60
+        curve.x = -600 + (i-2)*90
+        draw(mode=curve,numIters=i,baseStep=100/(2**exp))
+        curve = holder
         exp += 1
-    turtle.exitonclick()
+    #turtle.exitonclick()
 
 #showHochGrowth()
 
 def drawHexagon(numIters,baseStep,x,y):
-    exp = (numIters-3)/2 + 1
-    xDif = baseStep * (3**exp)
-    yDif = 1/3 * xDif * math.sin(math.pi/3) 
     turtle.setx(x)
     turtle.sety(y)
     for i in range(6):  
@@ -245,7 +261,6 @@ def drawHexaflake(numIters=9,cx=-200,cy=100):
     
     while numIters > 3:       
         numIters -= 2
-        temp = []
         for i in snowflakes:
             
             x1 = i[0]
@@ -266,8 +281,6 @@ def drawHexaflake(numIters=9,cx=-200,cy=100):
             x6 = x2 + 1/3*xDif
             y6 = y5 
             
-
-
             nextFlakes.append([[x1,y1],[x2,y2],[x3,y3],[x4,y4],[x5,y5],[x6,y6]])
         for ring in nextFlakes:
             for flake in ring:
@@ -281,9 +294,36 @@ def drawHexaflake(numIters=9,cx=-200,cy=100):
         xDif = baseStep * (3**exp)
         yDif = 1/3 * xDif * math.sin(math.pi/3)
 
-#drawHexaflake(9)  # fractal of a fractal
+#drawHexaflake(13)  # fractal of a fractal
 #hoch = HochInit(-600,-200,0)
 #draw(hoch,baseStep=2,numIters=13)
-drawHexaflake(numIters=5)
+#drawHexaflake(numIters=9)
+#draw(dragon,numIters=17)
+#draw(LevyInit(cy=-200),baseStep=2,numIters=16)
+
+
+#### MY CURVES
+triangleFromRectangles = Curve(difference1=270,difference2=90,reverse1=True,reverse2=False,x=200)
+spaceFillingTriangle = Curve(difference1=270,difference2=90,reverse1=False,reverse2=False,x=200)
+otherTriangleFill = Curve(difference1=270,difference2=90,reverse1=True,reverse2=True,x=200)
+pipes = Curve(difference1=90,difference2=270,reverse1=False,reverse2=True,x=200)
+hochVariant = Curve(difference1=-60,difference2=90,reverse1=False,reverse2=False,x=200,initialStep=[[120]]) #<-- nice
+
+#draw(spaceFillingTriangle,baseStep=30,numIters=3)
+
+#showCurveGrowth(spaceFillingTriangle)
+#showCurveGrowth(curve1)
+#draw(hochVariant,baseStep=5,numIters=10)
+def isThisAlreadyaThing(): #Seriously is it because if not I want credit. its cool
+    turtle.setx(-200)
+    turtle.sety(0)
+    for i in range(4):
+        hochVariant = Curve(difference1=-60,difference2=90,reverse1=False,reverse2=False,x=turtle.xcor(),y=turtle.ycor(),initialStep=[[-75+90*i]]) #<-- nice
+        draw(hochVariant,baseStep=5,numIters=10)
+
+#isThisAlreadyaThing()
+
+draw(otherTriangleFill,baseStep=2,numIters=16)
+
 
 turtle.exitonclick()
